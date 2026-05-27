@@ -30,30 +30,6 @@ Traffic is first routed through an ultra-low latency **Triage Layer**. Suspiciou
 
 <br/>
 
-## 🧠 Architecture
-
-```mermaid
-graph TD
-    Client([User Application]) -->|POST /v1/chat/completions| Proxy(FastAPI Gateway)
-    Proxy --> Triage{Fast Triage Layer}
-    
-    Triage -->|Safe| Upstream((Upstream LLM))
-    Triage -->|Suspicious| Agents[LangGraph Fan-out]
-    
-    Agents --> Inject[Prompt Injection Agent]
-    Agents --> Leak[Data Leakage & PII Agent]
-    Agents --> Policy[Custom Policy Agent]
-    
-    Inject --> Orch((Orchestrator Agent))
-    Leak --> Orch
-    Policy --> Orch
-    
-    Orch -->|ALLOW| Upstream
-    Orch -->|BLOCK| Proxy
-    
-    Upstream --> Proxy
-    Proxy -->|Response / 403 Forbidden| Client
-
 ## 🛡️ Core Capabilities
 <details open>
 <summary><b>1. Concurrent Multi-Agent Swarm (LangGraph)</b></summary>
@@ -146,3 +122,28 @@ print(response.choices[0].message.content)
 <i>Built with ❤️ for secure AI deployments.</i>
 </div>
 ```
+
+## 🧠 Architecture
+
+```mermaid
+graph TD
+    Client([User Application]) -->|POST /v1/chat/completions| Proxy(FastAPI Gateway)
+    Proxy --> Triage{Fast Triage Layer}
+    
+    Triage -->|Safe| Upstream((Upstream LLM))
+    Triage -->|Suspicious| Agents[LangGraph Fan-out]
+    
+    Agents --> Inject[Prompt Injection Agent]
+    Agents --> Leak[Data Leakage & PII Agent]
+    Agents --> Policy[Custom Policy Agent]
+    
+    Inject --> Orch((Orchestrator Agent))
+    Leak --> Orch
+    Policy --> Orch
+    
+    Orch -->|ALLOW| Upstream
+    Orch -->|BLOCK| Proxy
+    
+    Upstream --> Proxy
+    Proxy -->|Response / 403 Forbidden| Client
+
