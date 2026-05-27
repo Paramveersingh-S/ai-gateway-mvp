@@ -53,7 +53,8 @@ graph TD
     
     Upstream --> Proxy
     Proxy -->|Response / 403 Forbidden| Client
-🛡️ Core Capabilities
+
+## 🛡️ Core Capabilities
 <details open>
 <summary><b>1. Concurrent Multi-Agent Swarm (LangGraph)</b></summary>
 <br/>
