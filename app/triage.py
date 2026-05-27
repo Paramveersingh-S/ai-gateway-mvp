@@ -6,14 +6,8 @@ class Triage:
         self.mode = settings.triage_mode
 
     async def classify(self, prompt: str) -> Tuple[bool, float]:
-        """Returns (is_suspicious, confidence) in <100ms."""
-        suspicious_keywords = [
-            "ignore previous", "system:", "dan", "jailbreak", "bypass",
-            "forget all", "api key", "password", "secret", "hack"
-        ]
-        prompt_lower = prompt.lower()
-        if any(keyword in prompt_lower for keyword in suspicious_keywords):
-            return True, 0.95
-        if len(prompt) > 1000:
-            return True, 0.70
-        return False, 0.10
+        """
+        By returning (True, 1.0), we are telling the gateway:
+        'EVERY prompt is suspicious. Send 100% of traffic to the AI Agents.'
+        """
+        return True, 1.0
