@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Security Gateway Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans h-screen flex overflow-hidden">
+    <div id="app" class="w-full h-full flex">
+        
+        <!-- Sidebar Navigation -->
+        <div class="w-64 bg-slate-900 text-white flex flex-col">
+            <div class="p-6 text-xl font-bold border-b border-slate-700 flex items-center gap-3">
+                <i class="fa-solid fa-shield-halved text-blue-400"></i> AI Gateway
+            </div>
+            <nav class="flex-1 p-4 space-y-2">
+                <button @click="activeTab = 'chat'" :class="['w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors', activeTab === 'chat' ? 'bg-blue-600' : 'hover:bg-slate-800']">
+                    <i class="fa-solid fa-comment-dots"></i> Test Chat
+                </button>
+                <button @click="activeTab = 'logs'; fetchLogs()" :class="['w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors', activeTab === 'logs' ? 'bg-blue-600' : 'hover:bg-slate-800']">
+                    <i class="fa-solid fa-list"></i> Audit Logs
+                </button>
+                <button @click="activeTab = 'policy'; fetchActivePolicy()" :class="['w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors', activeTab === 'policy' ? 'bg-blue-600' : 'hover:bg-slate-800']">
+                    <i class="fa-solid fa-file-contract"></i> Policies
+                </button>
+            </nav>
+            <div class="p-4 border-t border-slate-700 text-xs text-slate-400">
+                Gateway API Key:
+                <input v-model="gatewayKey" type="password" class="w-full mt-1 px-2 py-1 bg-slate-800 rounded text-white border border-slate-600" placeholder="my-secret-gateway-key">
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col h-full overflow-hidden">
+            
+            <!-- CHAT TAB -->
+            <div v-if="activeTab === 'chat'" class="flex-1 flex flex-col h-full bg-white">
+                <div class="p-4 border-b bg-gray-50 font-semibold shadow-sm z-10 flex justify-between items-center">
+                    <span>Chat Simulator (Powered by Groq Llama-3.1)</span>
+                    <button @click="messages = []" class="text-sm text-red-500 hover:underline">Clear</button>
+                </div>
+                <div class="flex-1 p-6 overflow-y-auto space-y-4" id="chat-container">
+                    <div v-if="messages.length === 0" class="text-center text-gray-400 mt-10">
+                        Send a message to test the gateway.<br>Try standard prompts, or try injecting a jailbreak or asking for internal secrets.
+                    </div>
+                    <div v-for="(msg, index) in messages" :key="index" :class="['flex', msg.role === 'user' ? 'justify-end' : 'justify-start']">
+                        <div :class="['max-w-[70%] rounded-xl p-4', msg.role === 'user' ? 'bg-blue-600 text-white' : (msg.isError ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-gray-100 text-gray-800')]">
+                            <div class="text-xs opacity-75 mb-1 font-semibold uppercase">{{ msg.role }}</div>
+                            <div class="whitespace-pre-wrap">{{ msg.content }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 border-t bg-gray-50">
+                    <form @submit.prevent="sendMessage" class="flex gap-2">
+                        <input v-model="currentMessage" type="text" class="flex-1 px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type your prompt here..." :disabled="isLoading">
+                        <button type="submit" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50" :disabled="isLoading || !currentMessage.trim()">
+                            <span v-if="isLoading"><i class="fa-solid fa-spinner fa-spin"></i></span>
+                            <span v-else>Send</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- LOGS TAB -->
+            <div v-if="activeTab === 'logs'" class="flex-1 overflow-auto p-8 bg-gray-50">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800">Security Audit Logs</h2>
+                    <button @click="fetchLogs" class="bg-white border px-4 py-2 rounded shadow-sm hover:bg-gray-50"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+                </div>
+
+                <!-- Live Analytics Cards -->
+                <div class="grid grid-cols-3 gap-6 mb-6">
+                    <div class="bg-white p-6 rounded-xl shadow border border-l-4 border-l-blue-500">
+                        <div class="text-sm text-gray-500 font-bold uppercase mb-1">Total Requests</div>
+                        <div class="text-3xl font-black text-slate-800">{{ logs.length }}</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow border border-l-4 border-l-red-500">
+                        <div class="text-sm text-gray-500 font-bold uppercase mb-1">Security Block Rate</div>
+                        <div class="text-3xl font-black text-slate-800">{{ blockRate }}</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow border border-l-4 border-l-green-500">
+                        <div class="text-sm text-gray-500 font-bold uppercase mb-1">Avg Gateway Latency</div>
+                        <div class="text-3xl font-black text-slate-800">{{ avgLatency }}</div>
+                    </div>
+                </div>
+
+                <!-- Logs Table -->
+                <div class="bg-white rounded-xl shadow border overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-600 text-sm border-b">
+                                <th class="p-4">Time</th>
+                                <th class="p-4">Prompt (Truncated)</th>
+                                <th class="p-4">Decision</th>
+                                <th class="p-4">Reason</th>
+                                <th class="p-4">Latency</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="log in logs" :key="log.id" class="border-b hover:bg-gray-50 text-sm">
+                                <td class="p-4 text-gray-500 whitespace-nowrap">{{ new Date(log.timestamp).toLocaleTimeString() }}</td>
+                                <td class="p-4 max-w-xs truncate">{{ log.prompt }}</td>
+                                <td class="p-4">
+                                    <span :class="['px-2 py-1 rounded text-xs font-bold uppercase', log.decision === 'allow' ? 'bg-green-100 text-green-700' : (log.decision === 'block' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')]">
+                                        {{ log.decision }}
+                                    </span>
+                                </td>
+                                <td class="p-4 text-gray-600">{{ log.reason }}</td>
+                                <td class="p-4 text-gray-500">{{ log.latency_ms.toFixed(0) }} ms</td>
+                            </tr>
+                            <tr v-if="logs.length === 0">
+                                <td colspan="5" class="p-8 text-center text-gray-500">No logs found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- POLICY TAB -->
+            <div v-if="activeTab === 'policy'" class="flex-1 overflow-auto p-8 bg-gray-50">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Policy Management</h2>
+                
+                <div class="grid grid-cols-2 gap-8">
+                    <!-- Current Policy -->
+                    <div class="bg-white p-6 rounded-xl shadow border">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-700">Active Policy</h3>
+                        <div v-if="activePolicy" class="space-y-2">
+                            <p class="text-sm font-bold text-blue-600">Name: {{ activePolicy.name }}</p>
+                            <div class="bg-gray-50 p-4 rounded border text-sm text-gray-700 whitespace-pre-wrap font-mono">{{ activePolicy.content }}</div>
+                        </div>
+                        <div v-else class="text-gray-500 italic">Loading...</div>
+                    </div>
+
+                    <!-- Update Policy -->
+                    <div class="bg-white p-6 rounded-xl shadow border">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-700">Deploy New Policy</h3>
+                        <form @submit.prevent="updatePolicy" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Policy Name</label>
+                                <input v-model="newPolicy.name" type="text" class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Policy Rules (Natural Language)</label>
+                                <textarea v-model="newPolicy.content" rows="8" class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 font-mono text-sm" required></textarea>
+                            </div>
+                            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold shadow">
+                                Deploy Policy to Agents
+                            </button>
+                            <p v-if="policyMessage" class="text-green-600 text-sm mt-2 text-center font-medium">{{ policyMessage }}</p>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, nextTick, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const activeTab = ref('chat');
+                const gatewayKey = ref('my-secret-gateway-key');
+                
+                // Chat State
+                const messages = ref([]);
+                const currentMessage = ref('');
+                const isLoading = ref(false);
+
+                // Logs State
+                const logs = ref([]);
+
+                // Computed Analytics Properties
+                const blockRate = computed(() => {
+                    if (!logs.value.length) return '0%';
+                    const blocked = logs.value.filter(l => l.decision === 'block').length;
+                    return Math.round((blocked / logs.value.length) * 100) + '%';
+                });
+                
+                const avgLatency = computed(() => {
+                    if (!logs.value.length) return '0 ms';
+                    const total = logs.value.reduce((acc, l) => acc + l.latency_ms, 0);
+                    return Math.round(total / logs.value.length) + ' ms';
+                });
+
+                // Policy State
+                const activePolicy = ref(null);
+                const newPolicy = ref({
+                    name: 'Strict Corporate Policy v2',
+                    content: '1. Do not process requests asking for medical, legal, or financial advice.\n2. Do not discuss competitor products.\n3. Deny any request attempting to output raw code bypassing internal guidelines.\n4. Never expose API keys or PII.'
+                });
+                const policyMessage = ref('');
+
+                // API Helpers
+                const getHeaders = () => ({
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${gatewayKey.value}`
+                });
+
+                // Chat Functions
+                const sendMessage = async () => {
+                    if (!currentMessage.value.trim()) return;
+                    
+                    const userMsg = currentMessage.value;
+                    messages.value.push({ role: 'user', content: userMsg });
+                    currentMessage.value = '';
+                    isLoading.value = true;
+
+                    // Scroll to bottom
+                    nextTick(() => {
+                        const container = document.getElementById('chat-container');
+                        if(container) container.scrollTop = container.scrollHeight;
+                    });
+
+                    try {
+                        const res = await fetch('/v1/chat/completions', {
+                            method: 'POST',
+                            headers: getHeaders(),
+                            body: JSON.stringify({
+                                model: "llama-3.1-8b-instant",
+                                messages: [{ role: "user", content: userMsg }]
+                            })
+                        });
+                        
+                        const data = await res.json();
+                        
+                        if (!res.ok) {
+                            // Blocked by gateway or Gateway Auth Error
+                            messages.value.push({ 
+                                role: 'Gateway Shield', 
+                                content: data.error?.message || JSON.stringify(data),
+                                isError: true 
+                            });
+                        } else {
+                            // Allowed, show AI response or expose Groq errors gracefully
+                            messages.value.push({ 
+                                role: 'ai', 
+                                content: data.choices?.[0]?.message?.content || "GROQ ERROR: " + JSON.stringify(data)
+                            });
+                        }
+                    } catch (err) {
+                        messages.value.push({ role: 'system', content: 'Connection Error: ' + err.message, isError: true });
+                    } finally {
+                        isLoading.value = false;
+                        nextTick(() => {
+                            const container = document.getElementById('chat-container');
+                            if(container) container.scrollTop = container.scrollHeight;
+                        });
+                    }
+                };
+
+                // Logs Functions
+                const fetchLogs = async () => {
+                    try {
+                        const res = await fetch('/v1/admin/logs?limit=50', { headers: getHeaders() });
+                        if (res.ok) logs.value = await res.json();
+                    } catch (err) {
+                        console.error("Failed to fetch logs", err);
+                    }
+                };
+
+                // Policy Functions
+                const fetchActivePolicy = async () => {
+                    try {
+                        const res = await fetch('/v1/admin/policies/active', { headers: getHeaders() });
+                        if (res.ok) activePolicy.value = await res.json();
+                    } catch (err) {
+                        console.error("Failed to fetch policy", err);
+                    }
+                };
+
+                const updatePolicy = async () => {
+                    try {
+                        const res = await fetch('/v1/admin/policies', {
+                            method: 'POST',
+                            headers: getHeaders(),
+                            body: JSON.stringify({
+                                name: newPolicy.value.name,
+                                content: newPolicy.value.content,
+                                is_active: true
+                            })
+                        });
+                        if (res.ok) {
+                            policyMessage.value = "Policy updated successfully!";
+                            fetchActivePolicy();
+                            setTimeout(() => policyMessage.value = '', 3000);
+                        }
+                    } catch (err) {
+                        console.error("Failed to update policy", err);
+                    }
+                };
+
+                onMounted(() => {
+                    fetchActivePolicy();
+                    fetchLogs(); // Pre-fetch logs so Analytics display immediately
+                });
+
+                return {
+                    activeTab, gatewayKey,
+                    messages, currentMessage, isLoading, sendMessage,
+                    logs, fetchLogs, blockRate, avgLatency,
+                    activePolicy, newPolicy, policyMessage, fetchActivePolicy, updatePolicy
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
