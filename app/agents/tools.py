@@ -4,7 +4,17 @@ from loguru import logger
 
 try:
     from presidio_analyzer import AnalyzerEngine
-    analyzer = AnalyzerEngine()
+    from presidio_analyzer.nlp_engine import NlpEngineProvider
+
+    # Configure Presidio to use the small, 12MB RAM-friendly model
+    configuration = {
+        "nlp_engine_name": "spacy",
+        "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}],
+    }
+    provider = NlpEngineProvider(nlp_configuration=configuration)
+    nlp_engine = provider.create_engine()
+    
+    analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=["en"])
     PRESIDIO_AVAILABLE = True
 except Exception as e:
     logger.warning(f"Presidio not fully loaded, using regex. Error: {e}")
